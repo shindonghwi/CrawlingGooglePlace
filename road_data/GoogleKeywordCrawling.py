@@ -56,11 +56,22 @@ def getRegionList():
 
 
 def getRoadList():
-    # print("도로명주소 리스트 가져오기 시작")
-    sql = "select `region_idx`, `road_name` from `RoadName`"
+
+    sql = "select search_keyword from `SearchData` order by idx desc limit 1"
     dbCursor.execute(sql)
+
+    lastSearchKeyword = str(dbCursor.fetchone()[0]).split(' ')[1]
+
+    sql = "select idx from `RoadName` where road_name = %s"
+    dbCursor.execute(sql,(lastSearchKeyword))
+
+    lastRoadNameIndex = dbCursor.fetchone()[0]
+
+    print("도로명주소 리스트 가져오기 시작")
+    sql = "select `region_idx`, `road_name` from `RoadName` where idx > %s"
+    dbCursor.execute(sql, (lastRoadNameIndex))
     roadList = [item for item in dbCursor.fetchall()]
-    # print("도로명주소 리스트 가져오기 끝 : ", roadList, "\n")
+    print("도로명주소 리스트 가져오기 끝 : ", roadList, "\n")
     return roadList
 
 
@@ -98,44 +109,59 @@ def contentDownScrolling():
 
     whileTime = 0
     while True:
-        if whileTime > 5:
-            whileTime = 0
-            break
+        # if whileTime > 5:
+        #     whileTime = 0
+        #     break
         try:
-            time.sleep(0.5)
-            whileTime += 0.5
-            driver.find_element_by_xpath('[@id="sb_cb50"]').is_displayed()
+            # time.sleep(0.5)
+            # whileTime += 0.5
+            driver.find_element_by_xpath('//*[@id="sb_cb50"]').is_displayed()
             break
         except Exception as e:
             pass
 
     animation = [pyautogui.easeInQuad, pyautogui.easeInBounce, pyautogui.easeInCubic]
     while True:
-        if whileTime > 5:
-            whileTime = 0
-            break
-
-        pyautogui.moveTo(
-            random.randint(50, 400),
-            random.randint(300, 800),
-            0.1,
-            animation[random.randint(0, 2)]
-        )
-        pyautogui.scroll(-800)
-        whileTime += 0.5
+        # if whileTime > 5:
+        #     whileTime = 0
+        #     break
         try:
-            driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[4]/div[1]/div[39]/div').is_selected()
-            break
-        except Exception as e:
+            pyautogui.moveTo(
+                random.randint(50, 400),
+                random.randint(300, 800),
+                0.1,
+                animation[random.randint(0, 2)]
+            )
+            pyautogui.scroll(-800)
+            whileTime += 0.5
+            if whileTime > 3:
+                break
+            # try:
+            #     try:
+            #         if driver.find_element_by_xpath('//*[@id="omnibox-singlebox"]/div[1]/div[4]/div/div[1]/div/div/button/span').is_displayed():
+            #             driver.find_element_by_xpath('//*[@id="omnibox-singlebox"]/div[1]/div[4]/div/div[1]/div/div/button/span').click()
+            #     except Exception as e:
+            #         print('123123, ',e)
+            #         pass
+            #
+            #     for j in range(2,5,2):
+            #         for i in range(39,43):
+            #             driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div['+str(j)+']/div[1]/div['+str(i)+']/div').is_selected()
+            #             time.sleep(0.2)
+            #             break
+            #     return
+            # except Exception as e:
+            #     print(e)
+            #     pass
+        except:
             pass
-
 
 def contentClick(contentIdx):
     c = 0
     while True:
         time.sleep(0.5)
         c += 0.5
-        if c > 5:
+        if c > 2:
             return True
         try:
             driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[4]/div[1]/div['+str(contentIdx)+']/div/a').is_displayed()
@@ -334,7 +360,7 @@ if __name__ == '__main__':
 
 
     for region in regionList:  # 서울특별시, 경기도 ~~
-
+        startTime = time.time()
         for idx, roadNameTuple in enumerate(roadList):  # 성수동1가, 개봉동 ~~
 
             print(len(roadList), '번째 중 ', str(idx + 1), ' 시작')
@@ -355,9 +381,16 @@ if __name__ == '__main__':
             contentDownScrolling()  # """ 콘텐츠를 가장 아래쪽까지 스크롤 """
 
             responseDataList = []
-            print('검색어 : ', '{} {} {}\n'.format(region, roadName, keyword))
-            startTime = time.time()
+            # print('검색어 : ', '{} {} {}\n'.format(region, roadName, keyword))
+
             for contentIdx in tqdm(range(1, 45, 2)):
+
+                if contentIdx == 1:
+                    insertData = region + " " + roadName + " " + "-"
+                    insertSearchDataSql = "INSERT INTO `SearchData` (search_keyword) VALUES (%s)"
+                    dbCursor.execute(insertSearchDataSql, (insertData))
+                    dbConnect.commit()
+                    time.sleep(0.5)
 
                 try:
                     # if contentIdx < 27:
@@ -370,38 +403,40 @@ if __name__ == '__main__':
                         contentIdx += 2
 
                     isEmptyContent = contentClick(contentIdx)  # 콘텐츠 클릭
-                    if isEmptyContent == False:
+
+                    try:
+                        if driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[27]/h2').is_displayed():
+                            driver.find_element_by_xpath('//*[@id="omnibox-singlebox"]/div[1]/div[4]/div/div[1]/div/div/button/span').click()
+                    except:
+                        pass
+
+                    if not isEmptyContent:
                         responseData = getPlaceInfo()  # 콘텐츠 정보 수집
 
                         if responseData is not None:
-                            sql = "select count(idx) from `SearchData` where search_keyword = %s"
+                            insertPlaceSql = "INSERT INTO `Place` " \
+                                             "(category_idx, name, sub_name, phone, address," \
+                                             "time1, time2, time3, time4, time5, time6, time7," \
+                                             "latitude, longitude, image_list, website, created_at) VALUES " \
+                                             "(%s, %s, %s, %s, %s, " \
+                                             "%s, %s, %s, %s, %s, %s, %s, " \
+                                             "%s, %s, %s, %s, NOW());"
+
+                            val = (
+                                keywordIdx, responseData['name'], responseData['sub_name'],responseData['phone'],responseData['address'],
+                                responseData['time1'], responseData['time2'],responseData['time3'],responseData['time4'],responseData['time5'],responseData['time6'],responseData['time7'],
+                                responseData['latitude'], responseData['longitude'],responseData['image_list'],responseData['website']
+                            )
+                            dbCursor.execute(insertPlaceSql, val)
+
                             insertData = region + " " + roadName + " " + responseData['name']
-                            dbCursor.execute(sql,(insertData))
-                            if dbCursor.fetchone()[0] == 0:
-                                insertPlaceSql = "INSERT INTO `Place` " \
-                                                 "(category_idx, name, sub_name, phone, address," \
-                                                 "time1, time2, time3, time4, time5, time6, time7," \
-                                                 "latitude, longitude, image_list, website, created_at) VALUES " \
-                                                 "(%s, %s, %s, %s, %s, " \
-                                                 "%s, %s, %s, %s, %s, %s, %s, " \
-                                                 "%s, %s, %s, %s, NOW());"
-
-                                val = (
-                                    keywordIdx, responseData['name'], responseData['sub_name'],responseData['phone'],responseData['address'],
-                                    responseData['time1'], responseData['time2'],responseData['time3'],responseData['time4'],responseData['time5'],responseData['time6'],responseData['time7'],
-                                    responseData['latitude'], responseData['longitude'],responseData['image_list'],responseData['website']
-                                )
-                                dbCursor.execute(insertPlaceSql, val)
-
-                                insertSearchDataSql = "INSERT INTO `SearchData` (search_keyword) VALUES (%s)"
-                                dbCursor.execute(insertSearchDataSql, (insertData))
-                                dbConnect.commit()
-                                print('커밋')
-                            else:
-                                print('데이터베이스에 데이터 존재함')
+                            insertSearchDataSql = "INSERT INTO `SearchData` (search_keyword) VALUES (%s)"
+                            dbCursor.execute(insertSearchDataSql, (insertData))
+                            dbConnect.commit()
+                            print('커밋')
                         else:
                             print('가져올 데이터 없음')
-                    print("time: ", time.time() - startTime)
                 except Exception as e:
                     print('er: ', e)
+        print(region, " 지역 totalTime: ", time.time() - startTime)
 dbConnect.close()

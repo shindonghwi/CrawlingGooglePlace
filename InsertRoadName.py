@@ -44,8 +44,7 @@ def insertRoadNameData(dbCursor):
     for file in tqdm(os.listdir('road_data')):
         if 'txt' in file:
 
-            region = str(file).replace(".txt","")
-            print(region)
+            region = str(file).replace(".txt","").split('_')[1]
             sql = "select `idx` from `Region` where region = %s"
             dbCursor.execute(sql, (region))
             regionIdx = dbCursor.fetchone()[0]
