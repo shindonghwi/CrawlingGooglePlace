@@ -131,8 +131,6 @@ def contentDownScrolling():
 
 
 def contentClick(contentIdx):
-    global driver
-
     c = 0
     while True:
         time.sleep(0.5)
@@ -146,6 +144,7 @@ def contentClick(contentIdx):
             pass
 
     driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[4]/div[1]/div[' + str(contentIdx) + ']/div/a').click()
+    return False
 
 def getPlaceInfo():
     global driver
@@ -229,14 +228,20 @@ def getPlaceInfo():
     except NoSuchElementException as e:
         pass
 
-    sql = "select count(idx) from `Place` where phone = %s"
-    dbCursor.execute(sql,(responseData['phone']))
-
-    if dbCursor.fetchone()[0] == 0:
-        responseData = getImageUrlsAndGPS(responseData)
-    else:
-        print('있음')
-        responseData = None
+    if responseData['phone'] != '':
+        sql = "select count(idx) from `Place` where phone = %s"
+        dbCursor.execute(sql,(responseData['phone']))
+        if dbCursor.fetchone()[0] == 0:
+            responseData = getImageUrlsAndGPS(responseData)
+        else:
+            responseData = None
+    elif responseData['address'] != '':
+        sql = "select count(idx) from `Place` where address = %s"
+        dbCursor.execute(sql,(responseData['address']))
+        if dbCursor.fetchone()[0] == 0:
+            responseData = getImageUrlsAndGPS(responseData)
+        else:
+            responseData = None
 
     while True:
         try:
@@ -328,35 +333,33 @@ if __name__ == '__main__':
     driver = setWebBrowser()
 
 
-    for region in tqdm(regionList):  # 서울특별시, 경기도 ~~
+    for region in regionList:  # 서울특별시, 경기도 ~~
 
-        for roadNameTuple in roadList:  # 성수동1가, 개봉동 ~~
+        for idx, roadNameTuple in enumerate(roadList):  # 성수동1가, 개봉동 ~~
+
+            print(len(roadList), '번째 중 ', str(idx + 1), ' 시작')
+
             regionIdx = roadNameTuple[0]  # 1, 2 ~~ 지역 인덱스
             roadName = roadNameTuple[1]  # 도로명 주소 - ex) 성수동1가
 
-            try:
-                # for keywordTuple in keywordList:  # 필라테스, 태권도 ~~
+            # for keywordTuple in keywordList:  # 필라테스, 태권도 ~~
 
-                # 구글 지도
-                url = "https://www.google.com/maps/search/"
-                driver.get(url)
+            # 구글 지도
+            url = "https://www.google.com/maps/search/"
+            driver.get(url)
 
-                keywordIdx = 1
-                keyword = "피트니스"
+            keywordIdx = 1
+            keyword = "피트니스"
 
-                sql = "select count(idx) from `SearchData` where search_keyword = %s"
-                dbCursor.execute(sql,('{} {} {}'.format(region, roadName, keyword)))
+            searchDataInputAndClick(region, roadName, keyword)  # """ 검색어 입력후 클릭 """
+            contentDownScrolling()  # """ 콘텐츠를 가장 아래쪽까지 스크롤 """
 
-                if dbCursor.fetchone()[0] == 1:
-                    continue
-                searchDataInputAndClick(region, roadName, keyword)  # """ 검색어 입력후 클릭 """
-                contentDownScrolling()  # """ 콘텐츠를 가장 아래쪽까지 스크롤 """
+            responseDataList = []
+            print('검색어 : ', '{} {} {}\n'.format(region, roadName, keyword))
+            startTime = time.time()
+            for contentIdx in tqdm(range(1, 45, 2)):
 
-                responseDataList = []
-                print('검색어 : ', '{} {} {}\n'.format(region, roadName, keyword))
-                startTime = time.time()
-                for contentIdx in tqdm(range(1, 45, 2)):
-
+                try:
                     # if contentIdx < 27:
                     #     continue
 
@@ -367,33 +370,38 @@ if __name__ == '__main__':
                         contentIdx += 2
 
                     isEmptyContent = contentClick(contentIdx)  # 콘텐츠 클릭
-                    if not isEmptyContent:
+                    if isEmptyContent == False:
                         responseData = getPlaceInfo()  # 콘텐츠 정보 수집
+
                         if responseData is not None:
-                            responseDataList.append(responseData)
+                            sql = "select count(idx) from `SearchData` where search_keyword = %s"
+                            insertData = region + " " + roadName + " " + responseData['name']
+                            dbCursor.execute(sql,(insertData))
+                            if dbCursor.fetchone()[0] == 0:
+                                insertPlaceSql = "INSERT INTO `Place` " \
+                                                 "(category_idx, name, sub_name, phone, address," \
+                                                 "time1, time2, time3, time4, time5, time6, time7," \
+                                                 "latitude, longitude, image_list, website, created_at) VALUES " \
+                                                 "(%s, %s, %s, %s, %s, " \
+                                                 "%s, %s, %s, %s, %s, %s, %s, " \
+                                                 "%s, %s, %s, %s, NOW());"
 
-                for inputData in responseDataList:
-                    insertPlaceSql = "INSERT INTO `Place` " \
-                                     "(category_idx, name, sub_name, phone, address," \
-                                     "time1, time2, time3, time4, time5, time6, time7," \
-                                     "latitude, longitude, image_list, website, created_at) VALUES " \
-                                     "(%s, %s, %s, %s, %s, " \
-                                     "%s, %s, %s, %s, %s, %s, %s, " \
-                                     "%s, %s, %s, %s, NOW());"
+                                val = (
+                                    keywordIdx, responseData['name'], responseData['sub_name'],responseData['phone'],responseData['address'],
+                                    responseData['time1'], responseData['time2'],responseData['time3'],responseData['time4'],responseData['time5'],responseData['time6'],responseData['time7'],
+                                    responseData['latitude'], responseData['longitude'],responseData['image_list'],responseData['website']
+                                )
+                                dbCursor.execute(insertPlaceSql, val)
 
-                    val = (
-                        keywordIdx, inputData['name'], inputData['sub_name'],inputData['phone'],inputData['address'],
-                        inputData['time1'], inputData['time2'],inputData['time3'],inputData['time4'],inputData['time5'],inputData['time6'],inputData['time7'],
-                        inputData['latitude'], inputData['longitude'],inputData['image_list'],inputData['website']
-                    )
-
-                    dbCursor.execute(insertPlaceSql, val)
-
-                insertSearchDataSql = "INSERT INTO `SearchData` (search_keyword) VALUES (%s)"
-                insertData = region + " " + roadName + " " + keyword
-                dbCursor.execute(insertSearchDataSql, (insertData))
-                dbConnect.commit()
-                print("time: ", time.time() - startTime)
-            except:
-                print('er')
+                                insertSearchDataSql = "INSERT INTO `SearchData` (search_keyword) VALUES (%s)"
+                                dbCursor.execute(insertSearchDataSql, (insertData))
+                                dbConnect.commit()
+                                print('커밋')
+                            else:
+                                print('데이터베이스에 데이터 존재함')
+                        else:
+                            print('가져올 데이터 없음')
+                    print("time: ", time.time() - startTime)
+                except Exception as e:
+                    print('er: ', e)
 dbConnect.close()
