@@ -1,18 +1,10 @@
 import random
 import time
-from urllib.parse import unquote_plus
 from selenium.common.exceptions import NoSuchElementException
-import requests
-from bs4 import BeautifulSoup
-import pymysql as pymysql
 from selenium import webdriver
 import pymysql as pymysql
-import os
 from tqdm import tqdm
 import pyautogui
-from mechanize import Browser
-import threading
-from selenium.webdriver.common.keys import Keys
 
 dbConnect = None
 dbCursor = None
@@ -65,7 +57,7 @@ def getRegionList():
 
 def getRoadList():
     # print("도로명주소 리스트 가져오기 시작")
-    sql = "select `region_idx`, `road_name` from `RoadName` where saveComplete = 0"
+    sql = "select `region_idx`, `road_name` from `RoadName`"
     dbCursor.execute(sql)
     roadList = [item for item in dbCursor.fetchall()]
     # print("도로명주소 리스트 가져오기 끝 : ", roadList, "\n")
@@ -83,7 +75,7 @@ def setWebBrowser():
     options.add_argument("disable-gpu")  # 가속 사용 x
     options.add_argument("lang=ko_KR")  # 가짜 플러그인 탑재
     options.add_argument(
-        'user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36')  # user-agent 이름 설정
+        'user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/'+str(random.randint(62,80))+'.0.3163.100 Safari/537.36')  # user-agent 이름 설정
     browser = webdriver.Chrome('C:/Users/ehdgn/IdeaProjects/CrawlingGooglePlace/chromedriver.exe', options=options)
     return browser
 
@@ -106,28 +98,27 @@ def contentDownScrolling():
 
     whileTime = 0
     while True:
-        if whileTime > 10:
+        if whileTime > 5:
             whileTime = 0
             break
         try:
             time.sleep(0.5)
             whileTime += 0.5
-            driver.find_element_by_xpath(
-                '//*[@id="pane"]/div/div[1]/div/div/div[2]/div[1]/div/button/span[1]').is_displayed()
+            driver.find_element_by_xpath('[@id="sb_cb50"]').is_displayed()
             break
         except Exception as e:
             pass
 
     animation = [pyautogui.easeInQuad, pyautogui.easeInBounce, pyautogui.easeInCubic]
     while True:
-        if whileTime > 10:
+        if whileTime > 5:
             whileTime = 0
             break
 
         pyautogui.moveTo(
             random.randint(50, 400),
             random.randint(300, 800),
-            0.2,
+            0.1,
             animation[random.randint(0, 2)]
         )
         pyautogui.scroll(-800)
@@ -142,16 +133,19 @@ def contentDownScrolling():
 def contentClick(contentIdx):
     global driver
 
+    c = 0
     while True:
+        time.sleep(0.5)
+        c += 0.5
+        if c > 5:
+            return True
         try:
-            driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[4]/div[1]/div[1]/div/a').is_displayed()
-            time.sleep(1)
+            driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[4]/div[1]/div['+str(contentIdx)+']/div/a').is_displayed()
             break
         except:
             pass
-    driver.find_element_by_xpath(
-        '//*[@id="pane"]/div/div[1]/div/div/div[4]/div[1]/div[' + str(contentIdx) + ']/div/a').click()
 
+    driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[4]/div[1]/div[' + str(contentIdx) + ']/div/a').click()
 
 def getPlaceInfo():
     global driver
@@ -161,7 +155,6 @@ def getPlaceInfo():
     responseData['sub_name'] = ''
     responseData['phone'] = ''
     responseData['address'] = ''
-    responseData['open_time'] = ''
     responseData['time1'] = ''
     responseData['time2'] = ''
     responseData['time3'] = ''
@@ -207,48 +200,49 @@ def getPlaceInfo():
         for i in range(2, 6):
             imageType = ""
             try:
-                imageType = driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[7]/div[' + str(
-                    i) + ']/button/div[1]/div[1]/div/img').get_attribute('src')
-            except:
-                imageType = driver.find_element_by_xpath(
-                    '//*[@id="pane"]/div/div[1]/div/div/div[7]/div[' + str(i) + ']/div[1]/img').get_attribute('src')
-
+                imageType = driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[7]/div[' + str(i) + ']/button/div[1]/div[1]/div/img').get_attribute('src')
+            except Exception as e:
+                imageType = driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[7]/div[' + str(i) + ']/div[1]/img').get_attribute('src')
             # 시간
             if "schedule_gm_blue_24dp" in imageType:
-                driver.find_element_by_xpath(
-                    '//*[@id="pane"]/div/div[1]/div/div/div[7]/div[' + str(i) + ']/div[1]/div/div[1]/span[2]').click()
-                timeText = driver.find_element_by_xpath(
-                    '//*[@id="pane"]/div/div[1]/div/div/div[7]/div[' + str(i) + ']/div[2]')
+                driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[7]/div[' + str(i) + ']/div[1]/div/div[1]/span[2]').click()
+                time.sleep(0.5)
+                timeText = driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[7]/div[' + str(i) + ']/div[2]')
                 timeText = str(timeText.text).replace("수정 제안하기", "")
-                responseData["saturday"] = timeText.split("\n")[1]
-                responseData["sunday"] = timeText.split("\n")[3]
-                responseData["monday"] = timeText.split("\n")[5]
-                responseData["tuesday"] = timeText.split("\n")[7]
-                responseData["wednesday"] = timeText.split("\n")[9]
-                responseData["thursday"] = timeText.split("\n")[11]
-                responseData["friday"] = timeText.split("\n")[13]
+                responseData["time6"] = timeText.split("\n")[1]
+                responseData["time7"] = timeText.split("\n")[3]
+                responseData["time1"] = timeText.split("\n")[5]
+                responseData["time2"] = timeText.split("\n")[7]
+                responseData["time3"] = timeText.split("\n")[9]
+                responseData["time4"] = timeText.split("\n")[11]
+                responseData["time5"] = timeText.split("\n")[13]
             # 사이트
             elif "public_gm_blue_24dp" in imageType:
-                website = driver.find_element_by_xpath(
-                    '//*[@id="pane"]/div/div[1]/div/div/div[7]/div[' + str(i) + ']/button/div[1]/div[2]/div[1]')
+                website = driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[7]/div[' + str(i) + ']/button/div[1]/div[2]/div[1]')
                 responseData['website'] = "www.{}".format(website.text)
 
             # 번호
             elif "phone_gm_blue_24dp" in imageType:
-                phone = driver.find_element_by_xpath(
-                    '//*[@id="pane"]/div/div[1]/div/div/div[7]/div[' + str(i) + ']/button/div[1]/div[2]/div[1]')
+                phone = driver.find_element_by_xpath('//*[@id="pane"]/div/div[1]/div/div/div[7]/div[' + str(i) + ']/button/div[1]/div[2]/div[1]')
                 responseData['phone'] = phone.text
 
     except NoSuchElementException as e:
         pass
 
-    responseData = getImageUrlsAndGPS(responseData)
+    sql = "select count(idx) from `Place` where phone = %s"
+    dbCursor.execute(sql,(responseData['phone']))
+
+    if dbCursor.fetchone()[0] == 0:
+        responseData = getImageUrlsAndGPS(responseData)
+    else:
+        print('있음')
+        responseData = None
 
     while True:
         try:
             driver.find_element_by_xpath(
                 '//*[@id="omnibox-singlebox"]/div[1]/div[4]/div/div[1]/div/div/button/span').click()
-            time.sleep(2)
+            time.sleep(0.5)
             break
         except:
             pass
@@ -257,9 +251,6 @@ def getPlaceInfo():
 
 
 def getImageUrlsAndGPS(responseData):
-    gpsInfo = str(driver.current_url).split('/')[6].replace("@", "").split(",")
-    responseData['latitude'] = gpsInfo[0]
-    responseData['longitude'] = gpsInfo[1]
 
     imageIsEmpty = False
 
@@ -288,6 +279,10 @@ def getImageUrlsAndGPS(responseData):
                 pass
 
         imageList = []
+
+        gpsInfo = str(driver.current_url).split('/')[6].replace("@", "").split(",")
+        responseData['latitude'] = gpsInfo[0]
+        responseData['longitude'] = gpsInfo[1]
 
         for idx in range(1, 10):
             for j in range(1, 5):
@@ -332,9 +327,6 @@ if __name__ == '__main__':
 
     driver = setWebBrowser()
 
-    # 구글 지도
-    url = "https://www.google.com/maps/search/"
-    driver.get(url)
 
     for region in tqdm(regionList):  # 서울특별시, 경기도 ~~
 
@@ -342,41 +334,66 @@ if __name__ == '__main__':
             regionIdx = roadNameTuple[0]  # 1, 2 ~~ 지역 인덱스
             roadName = roadNameTuple[1]  # 도로명 주소 - ex) 성수동1가
 
-            for keywordTuple in keywordList:  # 필라테스, 태권도 ~~
-                keywordIdx = keywordTuple[0]
-                keyword = keywordTuple[1]
+            try:
+                # for keywordTuple in keywordList:  # 필라테스, 태권도 ~~
 
+                # 구글 지도
+                url = "https://www.google.com/maps/search/"
+                driver.get(url)
+
+                keywordIdx = 1
+                keyword = "피트니스"
+
+                sql = "select count(idx) from `SearchData` where search_keyword = %s"
+                dbCursor.execute(sql,('{} {} {}'.format(region, roadName, keyword)))
+
+                if dbCursor.fetchone()[0] == 1:
+                    continue
                 searchDataInputAndClick(region, roadName, keyword)  # """ 검색어 입력후 클릭 """
                 contentDownScrolling()  # """ 콘텐츠를 가장 아래쪽까지 스크롤 """
 
                 responseDataList = []
-                for contentIdx in tqdm(range(1, 40, 2)):
+                print('검색어 : ', '{} {} {}\n'.format(region, roadName, keyword))
+                startTime = time.time()
+                for contentIdx in tqdm(range(1, 45, 2)):
+
+                    # if contentIdx < 27:
+                    #     continue
+
                     if contentIdx >= 13:
                         contentDownScrolling()
 
-                    contentClick(contentIdx)  # 콘텐츠 클릭
-                    responseData = getPlaceInfo()  # 콘텐츠 정보 수집
-                    responseDataList.append(responseData)
+                    if keyword == "태권도":
+                        contentIdx += 2
+
+                    isEmptyContent = contentClick(contentIdx)  # 콘텐츠 클릭
+                    if not isEmptyContent:
+                        responseData = getPlaceInfo()  # 콘텐츠 정보 수집
+                        if responseData is not None:
+                            responseDataList.append(responseData)
 
                 for inputData in responseDataList:
-                    insertSql = "INSERT INTO `Place` " \
-                          "(category_idx, name, sub_name, phone, address," \
-                          "time1, time2, time3, time4, time5, time6, time7," \
-                          "latitude, longitude, image_list, website) VALUES " \
-                          "(%s, %s, %s, %s, %s, " \
-                          "%s, %s, %s, %s, %s, %s, %s, " \
-                          "%s, %s, %s, %s);"
+                    insertPlaceSql = "INSERT INTO `Place` " \
+                                     "(category_idx, name, sub_name, phone, address," \
+                                     "time1, time2, time3, time4, time5, time6, time7," \
+                                     "latitude, longitude, image_list, website, created_at) VALUES " \
+                                     "(%s, %s, %s, %s, %s, " \
+                                     "%s, %s, %s, %s, %s, %s, %s, " \
+                                     "%s, %s, %s, %s, NOW());"
 
                     val = (
                         keywordIdx, inputData['name'], inputData['sub_name'],inputData['phone'],inputData['address'],
-                        inputData['monday'], inputData['tuesday'],inputData['wednesday'],inputData['thursday'],inputData['friday'],inputData['saturday'],inputData['sunday'],
-                        inputData['monday'], inputData['tuesday'],inputData['wednesday'],inputData['thursday']
+                        inputData['time1'], inputData['time2'],inputData['time3'],inputData['time4'],inputData['time5'],inputData['time6'],inputData['time7'],
+                        inputData['latitude'], inputData['longitude'],inputData['image_list'],inputData['website']
                     )
 
-                    dbCursor.execute(insertSql, val)
-                    dbConnect.commit()
+                    dbCursor.execute(insertPlaceSql, val)
 
-                    updateSql = "UPDATE `ROADNAME` set saveComplete=1 where region_idx = %s"
-                    dbCursor.execute(updateSql, regionIdx)
-                    dbConnect.commit()
+                insertSearchDataSql = "INSERT INTO `SearchData` (search_keyword) VALUES (%s)"
+                insertData = region + " " + roadName + " " + keyword
+                dbCursor.execute(insertSearchDataSql, (insertData))
+                dbConnect.commit()
+                print("time: ", time.time() - startTime)
+            except:
+                print('er')
 dbConnect.close()
